@@ -21,12 +21,9 @@ contract AccountModule is IAccountModule, GovernModule, Common{
     
     // //todo: did generated in contract
     // // external functions
-    function register(address addr, AccountType accountType, bytes32 hash) external returns (bytes32 did){
+    function register(AccountType accountType, bytes32 hash) external returns (bytes32 did){
         //check
-        if (addr == address(0)){
-            revert InvalidAddress();
-        }
-
+        address addr = msg.sender;
         if (addressToDid[addr] != bytes32(0)) {
             revert AddressAlreadyExists(addr);
         }
