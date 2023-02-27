@@ -12,11 +12,11 @@ contract ProductModule is Common, GovernModule{
     error OnlyProductOwnerCanCall(bytes productId);
     error InvalidProductStatus(bytes productId);
     // event
-    event CreateProduct(bytes indexed productId, bytes32 hash);
-    event ModifyProduct(bytes indexed productId, bytes32 hash);    
-    event DeleteProduct(bytes indexed productId);
-    event ProductApproved(bytes indexed productId);
-    event ProductDenied(bytes indexed productId);
+    event CreateProduct(bytes productId, bytes32 hash);
+    event ModifyProduct(bytes productId, bytes32 hash);    
+    event DeleteProduct(bytes productId);
+    event ProductApproved(bytes productId);
+    event ProductDenied(bytes productId);
     //enum && structs
     enum ProductStatus {
         NotExisted,
@@ -48,7 +48,7 @@ contract ProductModule is Common, GovernModule{
     }
 
     //functions
-    function createaProduct(bytes32 hash) external returns(bytes memory productId){
+    function createProduct(bytes32 hash) external returns(bytes memory productId){
         if (hash == bytes32(0)) {
             revert InvalidHash();
         }
