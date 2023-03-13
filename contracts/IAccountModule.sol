@@ -5,14 +5,6 @@ interface IAccountModule {
     event AccountRegistered(bytes32 did, address addr, AccountType accountType, bytes32 hash);
     event AccountApproved(bytes32 did);
     event AccountDenied(bytes32 did);
-
-    error AddressNotRegistered(address addr);
-    error AddressAlreadyExists(address addr);
-    error AccountAlreadyExists(bytes32 did);
-    error AccountNotExist(bytes32 did);
-    error AccountAlreadyAudited(bytes32 did);
-    error InvalidAccountId(bytes32 did);
-    error InvalidAccountStatus(bytes32 did);
     
 
     enum AccountType {

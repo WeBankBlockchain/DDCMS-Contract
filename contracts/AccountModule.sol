@@ -2,14 +2,14 @@ pragma solidity >0.8.0 <= 0.8.17;
 
 import "./GovernModule.sol";
 import "./IAccountModule.sol";
-import "./Common.sol";
 
-contract AccountModule is IAccountModule, GovernModule, Common{
+contract AccountModule is IAccountModule, GovernModule{
 
 
     // status
     mapping(address=>bytes32) private addressToDid;
     mapping(bytes32=>AccountData) private didToAccount;
+    mapping(bytes32=>bool) private addressHash;
     
 
     // constructor
@@ -19,14 +19,14 @@ contract AccountModule is IAccountModule, GovernModule, Common{
         _setupGovernors(_governors, GovernMode.Direct);
     }
     
-    // //todo: did generated in contract
     // // external functions
     function register(AccountType accountType, bytes32 hash) external returns (bytes32 did){
         //check
+        require(hash != bytes32(0), "Invalid hash");
+        require(!addressHash[hash], "dupplicate hash");
         address addr = msg.sender;
-        if (addressToDid[addr] != bytes32(0)) {
-            revert AddressAlreadyExists(addr);
-        }
+        require(addressToDid[addr] == bytes32(0), "address already registered");
+
         //effects
         did = _generateDid(accountType, addr, hash);
         addressToDid[addr] = did;
@@ -37,12 +37,7 @@ contract AccountModule is IAccountModule, GovernModule, Common{
 
     function approve(bytes32 did, bool agree) external onlyGovernor {
         AccountData storage account = didToAccount[did];
-        if (account.status == AccountStatus.UnRegistered) {
-            revert AccountNotExist(did);
-        }
-        if (account.status != AccountStatus.Registered) {
-            revert AccountAlreadyAudited(did);
-        }
+        require(account.status == AccountStatus.Registered, "Invalid account status");
         if (agree){
             account.status = AccountStatus.Approved;
             emit AccountApproved(did);
@@ -59,9 +54,7 @@ contract AccountModule is IAccountModule, GovernModule, Common{
 
     function getAccountByAddress(address addr) external override view returns(AccountData memory) {
         bytes32 did = addressToDid[addr];
-        if (did == 0){
-            revert AddressNotRegistered(addr);
-        }
+        require(did != 0, "address not existed");
         return didToAccount[did];
     }
 

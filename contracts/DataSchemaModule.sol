@@ -2,10 +2,9 @@ pragma solidity >0.8.0 <= 0.8.17;
 
 import "./GovernModule.sol";
 import "./IAccountModule.sol";
-import "./Common.sol";
 import "./libs/IdGeneratorLib.sol";
 
-contract DataSchemaModule is GovernModule, Common{
+contract DataSchemaModule is GovernModule{
     // errors
     error DataSchemaAlreadyExisted(bytes32 hash);
     error DataSchemaNotExisted(bytes dataSchemaId);
@@ -36,16 +35,12 @@ contract DataSchemaModule is GovernModule, Common{
 
     //function
     function createDataSchema(bytes32 hash) external returns(bytes memory dataSchemaId){
-        if (hash == bytes32(0)){
-            revert InvalidHash();
-        }
-        if(hashToId[hash].length != 0){
-            revert DataSchemaAlreadyExisted(hash);
-        }
+        require(hash != bytes32(0), "invalid hash");
+        require(hashToId[hash].length == 0, "data schema already existed");
+
         IAccountModule.AccountData  memory owner = accountModule.getAccountByAddress(msg.sender);
-        if(owner.status != IAccountModule.AccountStatus.Approved) {
-            revert IAccountModule.InvalidAccountStatus(owner.did);
-        }
+        require(owner.status == IAccountModule.AccountStatus.Approved, "invalid owner status");
+
 
         uint256 ownerNonce = ownerDataSchemaCount[owner.did];
 
@@ -62,18 +57,14 @@ contract DataSchemaModule is GovernModule, Common{
     
 
     function modifyDataSchema(bytes calldata dataSchemaId, bytes32 hash) external{
-        if (hash == bytes32(0)){
-            revert InvalidHash();
-        }
+        require(hash != bytes32(0), "invalid hash");
         
         DataSchema storage dataSchema = dataSchemas[dataSchemaId];
-        if (dataSchema.owner == bytes32(0)){
-            revert DataSchemaNotExisted(dataSchemaId);
-        }
+        require(dataSchema.owner != bytes32(0), "data schema not existed");
+
         IAccountModule.AccountData  memory owner = accountModule.getAccountByAddress(msg.sender);
-        if (dataSchema.owner != owner.did){
-            revert InvalidCaller();
-        }
+        require(owner.did == dataSchema.owner, "caller not owner");
+
         
         bytes32 prevHash = dataSchema.hash;    
         dataSchema.hash = hash;
@@ -87,15 +78,12 @@ contract DataSchemaModule is GovernModule, Common{
 
     function deleteDataSchema(bytes calldata dataSchemaId) external  {
         DataSchema storage dataSchema = dataSchemas[dataSchemaId];
-
-        if (dataSchema.owner == bytes32(0)){
-            revert DataSchemaNotExisted(dataSchemaId);
-        }
+        
+        require(dataSchema.owner != bytes32(0), "data schema not existed");
         
         IAccountModule.AccountData  memory owner = accountModule.getAccountByAddress(msg.sender);
-        if (dataSchema.owner != owner.did){
-            revert InvalidCaller();
-        }
+        require(owner.did == dataSchema.owner, "caller not owner");
+
         
 
         bytes32 hash = dataSchema.hash;

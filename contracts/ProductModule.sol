@@ -2,15 +2,9 @@ pragma solidity >0.8.0 <= 0.8.17;
 
 import "./GovernModule.sol";
 import "./IAccountModule.sol";
-import "./Common.sol";
 import "./libs/IdGeneratorLib.sol";
 
-contract ProductModule is Common, GovernModule{
-    // error
-    error ProductAlreadyCreated(bytes32 hash);
-    error ProductNotExisted(bytes productId);
-    error OnlyProductOwnerCanCall(bytes productId);
-    error InvalidProductStatus(bytes productId);
+contract ProductModule is  GovernModule{
     // event
     event CreateProduct(bytes productId, bytes32 hash);
     event ModifyProduct(bytes productId, bytes32 hash);    
@@ -49,16 +43,10 @@ contract ProductModule is Common, GovernModule{
 
     //functions
     function createProduct(bytes32 hash) external returns(bytes memory productId){
-        if (hash == bytes32(0)) {
-            revert InvalidHash();
-        }
+        require(hash != bytes32(0), "Invalid hash");
         IAccountModule.AccountData  memory owner = accountModule.getAccountByAddress(msg.sender);
-        if(owner.status != IAccountModule.AccountStatus.Approved) {
-            revert IAccountModule.InvalidAccountStatus(owner.did);
-        }
-        if(hashToId[hash].length != 0) {
-            revert  ProductAlreadyCreated(hash);
-        }
+        require(owner.status == IAccountModule.AccountStatus.Approved, "invalid owner status");
+        require(hashToId[hash].length == 0, "product already created");
         
         uint256 ownerNonce = ownerProductCount[owner.did];
         productId = IdGeneratorLib.generateId(owner.did, ownerNonce);
@@ -72,13 +60,9 @@ contract ProductModule is Common, GovernModule{
     
     function modifyProduct(bytes calldata productId, bytes32 hash) external {
         ProductInfo storage product = products[productId];
-        if (product.status == ProductStatus.NotExisted) {
-            revert ProductNotExisted(productId);
-        }
+        require(product.status != ProductStatus.NotExisted, "product not existed");
         IAccountModule.AccountData memory owner = accountModule.getAccountByAddress(msg.sender);
-        if (owner.did != product.owner) {
-            revert InvalidCaller();
-        }
+        require(owner.did == product.owner, "caller not owner");
 
         bytes32 prevHash = product.hash;
         product.hash = hash;
@@ -91,13 +75,10 @@ contract ProductModule is Common, GovernModule{
 
     function deleteProduct(bytes calldata productId) external {
         ProductInfo storage product = products[productId];
-        if (product.status == ProductStatus.NotExisted) {
-            revert ProductNotExisted(productId);
-        }
+        require(product.status != ProductStatus.NotExisted, "product not existed");
+
         IAccountModule.AccountData memory owner = accountModule.getAccountByAddress(msg.sender);
-        if (owner.did != product.owner) {
-            revert InvalidCaller();
-        }
+        require(owner.did == product.owner, "caller not owner");
 
         bytes32 prevHash = product.hash;
         delete products[productId];
@@ -108,12 +89,7 @@ contract ProductModule is Common, GovernModule{
 
     function approveProduct(bytes calldata productId, bool agree) external onlyGovernor{
         ProductInfo storage product = products[productId];
-        if (product.status == ProductStatus.NotExisted) {
-            revert ProductNotExisted(productId);
-        }
-        if (product.status != ProductStatus.Created) {
-            revert InvalidProductStatus(productId);
-        }
+        require(product.status == ProductStatus.Created, "invalid status");
         if (agree){
             product.status = ProductStatus.Approved;
             emit ProductApproved(productId);

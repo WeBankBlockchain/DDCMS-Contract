@@ -39,6 +39,7 @@ const {
       const event2 = receipt2.events[0];
       
     });
+
     
   });
   

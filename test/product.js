@@ -40,4 +40,31 @@ describe("Product Contract Test", function () {
     
   });
   
+  it("should approve product successfully", async function() {
+    const {productModule, normalSigner, governor} = await loadFixture(deployProduct);
+    const hash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('whatever'));
+    const receipt = await (await productModule.connect(normalSigner).createProduct(hash)).wait();
+    const event = receipt.events[0];
+    
+    const productId = event.args.productId;
+    // console.log(productId);
+
+    const approveReceipt = await (await productModule.connect(governor).approveProduct(productId, true)).wait();
+    expect(approveReceipt.events[0].event).to.be.equal("ProductApproved");
+    
+  });
+
+  it("should deny product successfully", async function() {
+    const {productModule, normalSigner, governor} = await loadFixture(deployProduct);
+    const hash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('whatever'));
+    const receipt = await (await productModule.connect(normalSigner).createProduct(hash)).wait();
+    const event = receipt.events[0];
+    
+    const productId = event.args.productId;
+    // console.log(productId);
+
+    const approveReceipt = await (await productModule.connect(governor).approveProduct(productId, false)).wait();
+    expect(approveReceipt.events[0].event).to.be.equal("ProductDenied");
+    
+  });
 });
