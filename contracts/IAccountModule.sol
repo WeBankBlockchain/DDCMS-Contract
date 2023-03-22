@@ -8,8 +8,10 @@ interface IAccountModule {
     
 
     enum AccountType {
-        NormalUser,
-        Enterprise
+        Person,
+        Company,
+        Witness,
+        Admin
     }
     
     enum AccountStatus{

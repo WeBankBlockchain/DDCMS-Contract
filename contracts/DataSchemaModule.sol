@@ -39,8 +39,10 @@ contract DataSchemaModule is GovernModule{
         require(hashToId[hash].length == 0, "data schema already existed");
 
         IAccountModule.AccountData  memory owner = accountModule.getAccountByAddress(msg.sender);
-        require(owner.status == IAccountModule.AccountStatus.Approved, "invalid owner status");
+        require(owner.status == IAccountModule.AccountStatus.Approved, "Owner must be registered, and approved");
 
+        
+        require(owner.accountType == IAccountModule.AccountType.Company, "Invalid account type");
 
         uint256 ownerNonce = ownerDataSchemaCount[owner.did];
 

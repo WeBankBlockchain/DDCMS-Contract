@@ -45,7 +45,8 @@ contract ProductModule is  GovernModule{
     function createProduct(bytes32 hash) external returns(bytes memory productId){
         require(hash != bytes32(0), "Invalid hash");
         IAccountModule.AccountData  memory owner = accountModule.getAccountByAddress(msg.sender);
-        require(owner.status == IAccountModule.AccountStatus.Approved, "invalid owner status");
+        require(owner.status == IAccountModule.AccountStatus.Approved, "Owner must be registered, and approved");
+        require(owner.accountType == IAccountModule.AccountType.Company, "Invalid account type");
         require(hashToId[hash].length == 0, "product already created");
         
         uint256 ownerNonce = ownerProductCount[owner.did];
