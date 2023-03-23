@@ -10,40 +10,56 @@ describe("Account Contract Test", function () {
   // We use loadFixture to run this setup once, snapshot that state,
   // and reset Hardhat Network to that snapshot in every test.
   async function deployAccount() {
-    const [normalSigner, governor ] = await ethers.getSigners();
-    const AccountModuleFactory = await ethers.getContractFactory("AccountModule");
-    const accountModule = await AccountModuleFactory.deploy(governor.address);
+    const [admin, witness1, witness2, normalSigner1, normalSigner2 ] = await ethers.getSigners();
+    const AccountContractFactory = await ethers.getContractFactory("AccountContract", admin);
+    const accountContract = await AccountContractFactory.deploy();
     
+    const adminAcnt = await accountContract.getAccountByAddress(admin.address);
 
-    return { accountModule, normalSigner, governor };
+    expect(adminAcnt.accountType).to.be.equal(3);
+    expect(adminAcnt.accountStatus).to.be.equal(1);
+
+
+    return { accountContract, admin, witness1, witness2,normalSigner1,normalSigner2 };
   }
 
-  it("Should register and query successful", async function () {
-    const { accountModule, normalSigner, governor} = await loadFixture(deployAccount);
-    const accountType = 1;
+  it("Should setup witness", async function () {
+    const { accountContract, admin, witness1, witness2} = await loadFixture(deployAccount);
     const hash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('whatever'));
-    const receipt = await (await (accountModule.connect(normalSigner).register(accountType,  hash))).wait();
-    const event = receipt.events[0];
-    expect(event.args.did).to.be.equal('0x0001208c00db55262550c247e6381d970186c88ffce887de6be980d4f0aa81de');
-    expect(event.args.accountType).to.be.equal(accountType);
-    expect(event.args.addr).to.be.equal(normalSigner.address);
-    expect(event.args.hash).to.be.equal(hash);
+    await accountContract.connect(admin).setupAccounts([witness1.address, witness2.address], [2, 2], [hash, hash]);
 
-    var accountData = await accountModule.getAccountByAddress(normalSigner.address);
+    const witness1Acnt = await accountContract.getAccountByAddress(witness1.address);
+    expect(witness1Acnt.accountType).to.be.equal(2);
+    expect(witness1Acnt.accountStatus).to.be.equal(1);
 
-    expect(accountData.did).to.be.equal('0x0001208c00db55262550c247e6381d970186c88ffce887de6be980d4f0aa81de');
-    expect(accountData.addr).to.be.equal(normalSigner.address);
-    expect(accountData.accountType).to.be.equal(accountType);
-    expect(accountData.status).to.be.equal(1);
-    expect(event.args.hash).to.be.equal(hash);
+  });
 
-    accountData = await accountModule.getAccountByDid(accountData.did);
+  it("Should register and approve success", async function () {
+    const { accountContract, admin, witness1, witness2,normalSigner1,normalSigner2} = await loadFixture(deployAccount);
+    //Register and approve
+    const hash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('whatever'));
+    const receipt = await (await accountContract.connect(normalSigner1).register(hash)).wait();
+    var normalSigner1Acnt = await accountContract.getAccountByAddress(normalSigner1.address);
+    expect(normalSigner1Acnt.accountType).to.be.equal(1);
+    expect(normalSigner1Acnt.accountStatus).to.be.equal(0);
+    
+    await (await accountContract.connect(admin).approve(normalSigner1Acnt.did, true)).wait();
+    
+    normalSigner1Acnt = await accountContract.getAccountByAddress(normalSigner1.address);
+    expect(normalSigner1Acnt.accountType).to.be.equal(1);
+    expect(normalSigner1Acnt.accountStatus).to.be.equal(1);
 
-    expect(accountData.did).to.be.equal('0x0001208c00db55262550c247e6381d970186c88ffce887de6be980d4f0aa81de');
-    expect(accountData.addr).to.be.equal(normalSigner.address);
-    expect(accountData.accountType).to.be.equal(accountType);
-    expect(accountData.status).to.be.equal(1);
-    expect(event.args.hash).to.be.equal(hash);
+    //Register and deny
+    await (await accountContract.connect(normalSigner2).register(hash)).wait();
+    var normalSigner2Acnt = await accountContract.getAccountByAddress(normalSigner2.address);
+    expect(normalSigner2Acnt.accountType).to.be.equal(1);
+    expect(normalSigner2Acnt.accountStatus).to.be.equal(0);
+    
+    await (await accountContract.connect(admin).approve(normalSigner2Acnt.did, false)).wait();
+    
+    normalSigner2Acnt = await accountContract.getAccountByAddress(normalSigner2.address);
+    expect(normalSigner2Acnt.accountType).to.be.equal(1);
+    expect(normalSigner2Acnt.accountStatus).to.be.equal(2);
 
   });
 });
