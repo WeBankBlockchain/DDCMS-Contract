@@ -1,16 +1,13 @@
 pragma solidity >0.8.0 <= 0.8.17;
 
-import "./GovernModule.sol";
-import "./IAccountModule.sol";
 import "./libs/IdGeneratorLib.sol";
+import "./AccountModule.sol";
 
-contract ProductModule is  GovernModule{
+contract ProductModule{
     // event
-    event CreateProduct(bytes productId, bytes32 hash);
-    event ModifyProduct(bytes productId, bytes32 hash);    
-    event DeleteProduct(bytes productId);
-    event ProductApproved(bytes productId);
-    event ProductDenied(bytes productId);
+    event CreateProduct(bytes32 productId, bytes32 hash); 
+    event ProductApproved(bytes32 productId);
+    event ProductDenied(bytes32 productId);
     //enum && structs
     enum ProductStatus {
         Approving,
@@ -25,30 +22,31 @@ contract ProductModule is  GovernModule{
     }
     
     struct VoteInfo {
-        uint256 voteCount;
-        
+        uint256 agreeCount;
+        uint256 denyCount;
+        mapping(bytes32=>bool) voters;
+        uint256 threshold;
     }
     //status
-    //ID改为string:ownerId + owner自增id 
 
-    address private accountContract;
+    AccountModule private accountContract;
     mapping(bytes32 => ProductInfo) products;
-    mapping(bytes32 => bytes) private hashToId;
+    mapping(bytes32 => bytes32) private hashToId;
     mapping(bytes32 => uint256) private ownerProductCount;
-    mapping(bytes32 => uint256) private productCreationVotes;
+    mapping(bytes32 => VoteInfo) private productCreationVotes;
     
     //constructor
     constructor(address _accountContract) {
-        accountContract = _accountContract;
+        accountContract = AccountModule(_accountContract);
     }
 
     //functions
     function createProduct(bytes32 hash) external returns(bytes32 productId){
         require(hash != bytes32(0), "Invalid hash");
-        IAccountModule.AccountData  memory owner = accountModule.getAccountByAddress(msg.sender);
-        require(owner.status == IAccountModule.AccountStatus.Approved, "Owner must be registered, and approved");
-        require(owner.accountType == IAccountModule.AccountType.Company, "Invalid account type");
-        require(hashToId[hash].length == 0, "duplicate product hash");
+        AccountModule.AccountData owner = accountContract.getAccountByAddress(addr);
+        require(owner.accountStatus == AccountType.Approved, "Address not approved");
+        require(owner.accountType == AccountType.Company, "Account is not company");
+        require(hashToId[hash] == 0, "duplicate product hash");
         
         uint256 ownerNonce = ownerProductCount[owner.did];
         productId = IdGeneratorLib.generateId(owner.did, ownerNonce);
@@ -57,20 +55,39 @@ contract ProductModule is  GovernModule{
         ownerNonce++;
         ownerProductCount[owner.did] = ownerNonce;
         
+        productCreationVotes[productId] = VoteInfo({
+            threshold: accountContract.accountTypeNumbers(AccountType.Witness)
+        });
         emit CreateProduct(productId, hash);
     }
 
 
-    function approveProduct(bytes calldata productId, bool agree) external onlyGovernor{
+    function approveProduct(bytes32 productId, bool agree) external{
+        AccountModule.AccountData owner = accountContract.getAccountByAddress(addr);
+        require(owner.accountStatus == AccountType.Approved, "Address not approved");
+        require(owner.accountType == AccountType.Witness, "Account is not witness");
         ProductInfo storage product = products[productId];
-        require(product.status == ProductStatus.Created, "invalid status");
+        require(product.status == ProductStatus.Approving, "Invalid product status");
+        VoteInfo storage voteInfo = productCreationVotes[productId];
+        require(!voteInfo.voters[owner.did], "Duplicate vote");
+        uint256 threshold = voteInfo.threshold;
         if (agree){
-            product.status = ProductStatus.Approved;
-            emit ProductApproved(productId);
+            uint256 agreeCount = voteInfo.agreeCount + 1;
+            voteInfo.agreeCount = agreeCount;
+            if (agreeCount >= threshold){
+                product.status = ProductStatus.Approved;
+                emit ProductApproved(productId);
+            }
+
         } else{
-            product.status = ProductStatus.Denied;
-            emit ProductDenied(productId);
+            uint256 denyCount = voteInfo.denyCount + 1;
+            voteInfo.denyCount = denyCount;
+            if (denyCount >= threshold){
+                product.status = ProductStatus.Denied;
+                emit ProductDenied(productId);
+            }
         }
+        voteInfo.voters[owner.did] = true;
     }
 
 }

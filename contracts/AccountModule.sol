@@ -4,6 +4,10 @@ import "./GovernModule.sol";
 import "./IAccountModule.sol";
 
 contract AccountModule{
+    //Events
+    event AccountRegistered(bytes32 did, address addr, AccountType accountType, bytes32 hash);
+    event AccountApproved(bytes32 did);
+    event AccountDenied(bytes32 did);
     //Enums && structs
     enum AccountType {
         Person,//0
@@ -27,9 +31,9 @@ contract AccountModule{
 
 
     // status
-    mapping(address=>bytes32) private addressToDid;
-    mapping(bytes32=>AccountData) private didToAccount;
-
+    mapping(address=>bytes32) public addressToDid;
+    mapping(bytes32=>AccountData) public didToAccount;
+    mapping(AccountType=>uint256) public accountTypeNumbers;
     // constructor
     constructor() {
         _register(msg.sender, AccountType.Admin, AccountStatus.Approved, bytes32(0));
@@ -73,6 +77,8 @@ contract AccountModule{
 
 
     //Query functions
+
+
     function getAccountByDid(bytes32 did) external view returns(AccountData memory) {
         return didToAccount[did];
     }
@@ -93,6 +99,7 @@ contract AccountModule{
         did = _generateDid(accountType, accountAddress, hash);
         addressToDid[addr] = did;
         didToAccount[did] = AccountData(accountAddress, accountType, accountStatus, hash);
+        accountTypeNumbers[accountType]++;
         emit AccountRegistered(did, accountAddress, accountType, hash);
     }
 
