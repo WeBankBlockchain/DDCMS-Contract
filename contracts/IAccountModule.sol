@@ -7,27 +7,7 @@ interface IAccountModule {
     event AccountDenied(bytes32 did);
     
 
-    enum AccountType {
-        Person,
-        Company,
-        Witness,
-        Admin
-    }
-    
-    enum AccountStatus{
-        UnRegistered, //0
-        Registered, //1
-        Approved, //2
-        Denied //3
-    }
 
-    struct AccountData{
-        bytes32 did;
-        address addr;
-        AccountStatus status;
-        AccountType accountType;
-        bytes32 hash;
-    }
 
     function getAccountByAddress(address addr) external view returns(AccountData memory);
 }

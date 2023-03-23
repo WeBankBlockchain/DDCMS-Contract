@@ -13,8 +13,7 @@ contract ProductModule is  GovernModule{
     event ProductDenied(bytes productId);
     //enum && structs
     enum ProductStatus {
-        NotExisted,
-        Created,
+        Approving,
         Approved,
         Denied
     }
@@ -25,68 +24,42 @@ contract ProductModule is  GovernModule{
         ProductStatus status;
     }
     
+    struct VoteInfo {
+        uint256 voteCount;
+        
+    }
     //status
     //ID改为string:ownerId + owner自增id 
 
-    IAccountModule private accountModule;
-    mapping(bytes => ProductInfo) products;
+    address private accountContract;
+    mapping(bytes32 => ProductInfo) products;
     mapping(bytes32 => bytes) private hashToId;
     mapping(bytes32 => uint256) private ownerProductCount;
+    mapping(bytes32 => uint256) private productCreationVotes;
     
     //constructor
-    constructor(address _governor, address accountContract) {
-        address[] memory _governors = new address[](1);
-        _governors[0] = _governor;
-        _setupGovernors(_governors, GovernMode.Direct);
-        accountModule = IAccountModule(accountContract);
+    constructor(address _accountContract) {
+        accountContract = _accountContract;
     }
 
     //functions
-    function createProduct(bytes32 hash) external returns(bytes memory productId){
+    function createProduct(bytes32 hash) external returns(bytes32 productId){
         require(hash != bytes32(0), "Invalid hash");
         IAccountModule.AccountData  memory owner = accountModule.getAccountByAddress(msg.sender);
         require(owner.status == IAccountModule.AccountStatus.Approved, "Owner must be registered, and approved");
         require(owner.accountType == IAccountModule.AccountType.Company, "Invalid account type");
-        require(hashToId[hash].length == 0, "product already created");
+        require(hashToId[hash].length == 0, "duplicate product hash");
         
         uint256 ownerNonce = ownerProductCount[owner.did];
         productId = IdGeneratorLib.generateId(owner.did, ownerNonce);
-        products[productId] = ProductInfo(hash, owner.did, ProductStatus.Created);
+        products[productId] = ProductInfo(hash, owner.did, ProductStatus.Approving);
         hashToId[hash] = productId;
         ownerNonce++;
         ownerProductCount[owner.did] = ownerNonce;
         
         emit CreateProduct(productId, hash);
     }
-    
-    function modifyProduct(bytes calldata productId, bytes32 hash) external {
-        ProductInfo storage product = products[productId];
-        require(product.status != ProductStatus.NotExisted, "product not existed");
-        IAccountModule.AccountData memory owner = accountModule.getAccountByAddress(msg.sender);
-        require(owner.did == product.owner, "caller not owner");
 
-        bytes32 prevHash = product.hash;
-        product.hash = hash;
-
-        delete hashToId[prevHash];
-        hashToId[hash] = productId;
-        
-        emit ModifyProduct(productId, hash);
-    }
-
-    function deleteProduct(bytes calldata productId) external {
-        ProductInfo storage product = products[productId];
-        require(product.status != ProductStatus.NotExisted, "product not existed");
-
-        IAccountModule.AccountData memory owner = accountModule.getAccountByAddress(msg.sender);
-        require(owner.did == product.owner, "caller not owner");
-
-        bytes32 prevHash = product.hash;
-        delete products[productId];
-        delete hashToId[prevHash];
-
-        emit DeleteProduct(productId);
-    }
 
     function approveProduct(bytes calldata productId, bool agree) external onlyGovernor{
         ProductInfo storage product = products[productId];
