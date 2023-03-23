@@ -1,9 +1,9 @@
 pragma solidity >0.8.0 <= 0.8.17;
 
 import "./libs/IdGeneratorLib.sol";
-import "./AccountModule.sol";
+import "./AccountContract.sol";
 
-contract ProductModule{
+contract ProductContract{
     // event
     event CreateProduct(bytes32 productId, bytes32 hash); 
     event ProductApproved(bytes32 productId);
@@ -24,28 +24,29 @@ contract ProductModule{
     struct VoteInfo {
         uint256 agreeCount;
         uint256 denyCount;
-        mapping(bytes32=>bool) voters;
         uint256 threshold;
     }
     //status
 
-    AccountModule private accountContract;
+    AccountContract private accountContract;
     mapping(bytes32 => ProductInfo) products;
     mapping(bytes32 => bytes32) private hashToId;
     mapping(bytes32 => uint256) private ownerProductCount;
     mapping(bytes32 => VoteInfo) private productCreationVotes;
+    mapping(bytes32=>mapping(bytes32=>bool)) private productVoters;
     
     //constructor
     constructor(address _accountContract) {
-        accountContract = AccountModule(_accountContract);
+        accountContract = AccountContract(_accountContract);
     }
 
     //functions
     function createProduct(bytes32 hash) external returns(bytes32 productId){
+        //request
         require(hash != bytes32(0), "Invalid hash");
-        AccountModule.AccountData owner = accountContract.getAccountByAddress(addr);
-        require(owner.accountStatus == AccountType.Approved, "Address not approved");
-        require(owner.accountType == AccountType.Company, "Account is not company");
+        AccountContract.AccountData memory owner = accountContract.getAccountByAddress(msg.sender);
+        require(owner.accountStatus == AccountContract.AccountStatus.Approved, "Address not approved");
+        require(owner.accountType == AccountContract.AccountType.Company, "Account is not company");
         require(hashToId[hash] == 0, "duplicate product hash");
         
         uint256 ownerNonce = ownerProductCount[owner.did];
@@ -55,21 +56,23 @@ contract ProductModule{
         ownerNonce++;
         ownerProductCount[owner.did] = ownerNonce;
         
-        productCreationVotes[productId] = VoteInfo({
-            threshold: accountContract.accountTypeNumbers(AccountType.Witness)
-        });
+        productCreationVotes[productId] = VoteInfo(
+            0,
+            0,
+            accountContract.accountTypeNumbers(AccountContract.AccountType.Witness)
+        );
         emit CreateProduct(productId, hash);
     }
 
 
     function approveProduct(bytes32 productId, bool agree) external{
-        AccountModule.AccountData owner = accountContract.getAccountByAddress(addr);
-        require(owner.accountStatus == AccountType.Approved, "Address not approved");
-        require(owner.accountType == AccountType.Witness, "Account is not witness");
+        AccountContract.AccountData memory owner = accountContract.getAccountByAddress(msg.sender);
+        require(owner.accountStatus == AccountContract.AccountStatus.Approved, "Address not approved");
+        require(owner.accountType == AccountContract.AccountType.Witness, "Account is not witness");
         ProductInfo storage product = products[productId];
         require(product.status == ProductStatus.Approving, "Invalid product status");
         VoteInfo storage voteInfo = productCreationVotes[productId];
-        require(!voteInfo.voters[owner.did], "Duplicate vote");
+        require(!productVoters[productId][owner.did], "Duplicate vote");
         uint256 threshold = voteInfo.threshold;
         if (agree){
             uint256 agreeCount = voteInfo.agreeCount + 1;
@@ -87,7 +90,7 @@ contract ProductModule{
                 emit ProductDenied(productId);
             }
         }
-        voteInfo.voters[owner.did] = true;
+        productVoters[productId][owner.did] = true;
     }
 
 }

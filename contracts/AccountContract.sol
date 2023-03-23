@@ -1,9 +1,7 @@
 pragma solidity >0.8.0 <= 0.8.17;
 
-import "./GovernModule.sol";
-import "./IAccountModule.sol";
 
-contract AccountModule{
+contract AccountContract{
     //Events
     event AccountRegistered(bytes32 did, address addr, AccountType accountType, bytes32 hash);
     event AccountApproved(bytes32 did);
@@ -24,8 +22,9 @@ contract AccountModule{
 
     struct AccountData{
         address addr;
+        bytes32 did;
         AccountType accountType;
-        AccountStatus status;
+        AccountStatus accountStatus;
         bytes32 hash;
     }
 
@@ -54,12 +53,12 @@ contract AccountModule{
     function approve(bytes32 did, bool agree) external {
         _requireOnlyAdmin(msg.sender);
         AccountData storage account = didToAccount[did];
-        require(account.status == AccountStatus.Approving, "Invalid account status");
+        require(account.accountStatus == AccountStatus.Approving, "Invalid account status");
         if (agree){
-            account.status = AccountStatus.Approved;
+            account.accountStatus = AccountStatus.Approved;
             emit AccountApproved(did);
         } else{
-            account.status = AccountStatus.Denied;
+            account.accountStatus = AccountStatus.Denied;
             emit AccountDenied(did);
         }
     }
@@ -83,7 +82,7 @@ contract AccountModule{
         return didToAccount[did];
     }
 
-    function getAccountByAddress(address addr) external override view returns(AccountData memory) {
+    function getAccountByAddress(address addr) external view returns(AccountData memory) {
         return _getAccountByAddress(addr);
     }
 
@@ -97,21 +96,21 @@ contract AccountModule{
 
     function _register(address accountAddress, AccountType accountType, AccountStatus accountStatus, bytes32 hash) internal returns(bytes32 did) {
         did = _generateDid(accountType, accountAddress, hash);
-        addressToDid[addr] = did;
-        didToAccount[did] = AccountData(accountAddress, accountType, accountStatus, hash);
+        addressToDid[accountAddress] = did;
+        didToAccount[did] = AccountData(accountAddress, did, accountType, accountStatus, hash);
         accountTypeNumbers[accountType]++;
         emit AccountRegistered(did, accountAddress, accountType, hash);
     }
 
-    function _getAccountByAddress(address addr) external override view returns(AccountData memory) {
+    function _getAccountByAddress(address addr) internal view returns(AccountData memory) {
         bytes32 did = addressToDid[addr];
         require(did != 0, "address not registered");
         return didToAccount[did];
     }
 
-    function _requireOnlyAdmin(address addr) external override {
+    function _requireOnlyAdmin(address addr) internal view {
         AccountData memory accountData = _getAccountByAddress(addr);
-        require(accountData.accountStatus == AccountType.Approved, "Only approved user can call");
+        require(accountData.accountStatus == AccountStatus.Approved, "Only approved user can call");
         require(accountData.accountType == AccountType.Admin, "Only admin can call");
     }
 }
