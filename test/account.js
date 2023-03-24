@@ -23,22 +23,11 @@ describe("Account Contract Test", function () {
     return { accountContract, admin, witness1, witness2,normalSigner1,normalSigner2 };
   }
 
-  it("Should setup witness", async function () {
-    const { accountContract, admin, witness1, witness2} = await loadFixture(deployAccount);
-    const hash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('whatever'));
-    await accountContract.connect(admin).setupAccounts([witness1.address, witness2.address], [2, 2], [hash, hash]);
-
-    const witness1Acnt = await accountContract.getAccountByAddress(witness1.address);
-    expect(witness1Acnt.accountType).to.be.equal(2);
-    expect(witness1Acnt.accountStatus).to.be.equal(1);
-
-  });
-
   it("Should register and approve success", async function () {
     const { accountContract, admin, witness1, witness2,normalSigner1,normalSigner2} = await loadFixture(deployAccount);
     //Register and approve
     const hash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('whatever'));
-    const receipt = await (await accountContract.connect(normalSigner1).register(hash)).wait();
+    const receipt = await (await accountContract.connect(normalSigner1).register(1, hash)).wait();
     var normalSigner1Acnt = await accountContract.getAccountByAddress(normalSigner1.address);
     expect(normalSigner1Acnt.accountType).to.be.equal(1);
     expect(normalSigner1Acnt.accountStatus).to.be.equal(0);
@@ -50,7 +39,7 @@ describe("Account Contract Test", function () {
     expect(normalSigner1Acnt.accountStatus).to.be.equal(1);
 
     //Register and deny
-    await (await accountContract.connect(normalSigner2).register(hash)).wait();
+    await (await accountContract.connect(normalSigner2).register(1,hash)).wait();
     var normalSigner2Acnt = await accountContract.getAccountByAddress(normalSigner2.address);
     expect(normalSigner2Acnt.accountType).to.be.equal(1);
     expect(normalSigner2Acnt.accountStatus).to.be.equal(0);
