@@ -55,11 +55,11 @@ contract DataSchemaContract{
         hashToId[hash] = dataSchemaId;
         ownerNonce++;
         ownerDataSchemaCount[owner.did] = ownerNonce;
-        
+        uint256 witnessCount = accountContract.accountTypeNumbers(AccountContract.AccountType.Witness);
         dataSchemaCreationVotes[dataSchemaId] = VoteInfo(
             0, 
             0, 
-            accountContract.accountTypeNumbers(AccountContract.AccountType.Witness)
+            (witnessCount + 1) / 2
         );
         emit CreateDataSchema(dataSchemaId, hash);
     }
@@ -94,4 +94,11 @@ contract DataSchemaContract{
         dataSchemaVoters[dataSchemaId][owner.did] = true;
     }
 
+    function getDataSchema(bytes32 dataSchemaId) external view returns(DataSchemaInfo memory){
+        return dataSchemas[dataSchemaId];
+    }
+
+    function getVoteInfo(bytes32 productId) external view returns(VoteInfo memory){
+        return dataSchemaCreationVotes[productId];
+    }
 }

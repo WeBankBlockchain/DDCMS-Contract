@@ -33,7 +33,7 @@ contract ProductContract{
     mapping(bytes32 => bytes32) private hashToId;
     mapping(bytes32 => uint256) private ownerProductCount;
     mapping(bytes32 => VoteInfo) private productCreationVotes;
-    mapping(bytes32=>mapping(bytes32=>bool)) private productVoters;
+    mapping(bytes32=>mapping(bytes32=>bool)) public productVoters;
     
     //constructor
     constructor(address _accountContract) {
@@ -55,11 +55,11 @@ contract ProductContract{
         hashToId[hash] = productId;
         ownerNonce++;
         ownerProductCount[owner.did] = ownerNonce;
-        
+        uint256 witnessCount = accountContract.accountTypeNumbers(AccountContract.AccountType.Witness);
         productCreationVotes[productId] = VoteInfo(
             0,
             0,
-            accountContract.accountTypeNumbers(AccountContract.AccountType.Witness)
+            (witnessCount + 1) / 2
         );
         emit CreateProduct(productId, hash);
     }
@@ -93,4 +93,11 @@ contract ProductContract{
         productVoters[productId][owner.did] = true;
     }
 
+    function getProduct(bytes32 productId) external view returns(ProductInfo memory){
+        return products[productId];
+    }
+
+    function getVoteInfo(bytes32 productId) external view returns(VoteInfo memory){
+        return productCreationVotes[productId];
+    }
 }

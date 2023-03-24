@@ -10,61 +10,67 @@ describe("Product Contract Test", function () {
   // We use loadFixture to run this setup once, snapshot that state,
   // and reset Hardhat Network to that snapshot in every test.
   async function deployProduct() {
-    const [normalSigner, governor ] = await ethers.getSigners();
-    const AccountModuleFactory = await ethers.getContractFactory("AccountModule");
-    const accountModule = await AccountModuleFactory.deploy(governor.address);
+    const [admin, witness1, witness2, normalSigner1, normalSigner2 ] = await ethers.getSigners();
+    const AccountContractFactory = await ethers.getContractFactory("AccountContract", admin);
+    const accountContract = await AccountContractFactory.deploy();
     
-    //register and approve the normal signer
-    const accountType = 1;
-    const hash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('whatever'));
-    const receipt = await (await (accountModule.connect(normalSigner).register(accountType,  hash))).wait();
-    const did = receipt.events[0].args.did;
+    const adminAcnt = await accountContract.getAccountByAddress(admin.address);
 
-    await (await (accountModule.connect(governor).approve(ethers.utils.arrayify(did), true))).wait();
-    
-    const ProductModuleFactory = await ethers.getContractFactory("ProductModule");
-    const productModule = await ProductModuleFactory.deploy(governor.address, accountModule.address);
-    
-    return {productModule, normalSigner, governor };
+    expect(adminAcnt.accountType).to.be.equal(3);
+    expect(adminAcnt.accountStatus).to.be.equal(1);
+
+    const hash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('whatever'));
+    await accountContract.connect(admin).setupAccounts([witness1.address, witness2.address], [2, 2], [hash, hash]);
+
+    await accountContract.connect(admin).setupAccounts([normalSigner1.address, normalSigner2.address], [1, 1], [hash, hash]);
+
+
+    const ProductContractFactory = await ethers.getContractFactory("ProductContract", admin);
+    const productContract = await ProductContractFactory.deploy(accountContract.address);
+    return { accountContract, productContract, admin, witness1, witness2,normalSigner1,normalSigner2 };
   }
 
-  it("should create product successfully", async function() {
-    const {productModule, normalSigner, governor} = await loadFixture(deployProduct);
+  it("should create product and agree successfully", async function() {
+    const {accountContract, productContract, admin, witness1, witness2,normalSigner1,normalSigner2 } = await loadFixture(deployProduct);
     const hash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('whatever'));
-    const receipt = await (await productModule.connect(normalSigner).createProduct(hash)).wait();
+    const receipt = await (await productContract.connect(normalSigner1).createProduct(hash)).wait();
     const event = receipt.events[0];
+    const productId = event.args.productId;
 
-    const hash2 = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('whatever2'));
-    const receipt2 = await (await productModule.connect(normalSigner).createProduct(hash2)).wait();
-    const event2 = receipt2.events[0];
+    await (await productContract.connect(witness1).approveProduct(productId, true)).wait();
+
+
+    const votes = await productContract.getVoteInfo(productId);
+
+    expect(votes.agreeCount).to.be.equal(1);
+    expect(votes.denyCount).to.be.equal(0);
+    expect(votes.threshold).to.be.equal(1);
+
+
+    const productInfo = await productContract.getProduct(productId);
+    expect(productInfo.status).to.be.equal(1);
     
   });
   
-  it("should approve product successfully", async function() {
-    const {productModule, normalSigner, governor} = await loadFixture(deployProduct);
+  it("should create product and deny successfully", async function() {
+    const {accountContract, productContract, admin, witness1, witness2,normalSigner1,normalSigner2 } = await loadFixture(deployProduct);
     const hash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('whatever'));
-    const receipt = await (await productModule.connect(normalSigner).createProduct(hash)).wait();
+    const receipt = await (await productContract.connect(normalSigner1).createProduct(hash)).wait();
     const event = receipt.events[0];
-    
     const productId = event.args.productId;
-    // console.log(productId);
 
-    const approveReceipt = await (await productModule.connect(governor).approveProduct(productId, true)).wait();
-    expect(approveReceipt.events[0].event).to.be.equal("ProductApproved");
-    
-  });
+    await (await productContract.connect(witness1).approveProduct(productId, false)).wait();
 
-  it("should deny product successfully", async function() {
-    const {productModule, normalSigner, governor} = await loadFixture(deployProduct);
-    const hash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('whatever'));
-    const receipt = await (await productModule.connect(normalSigner).createProduct(hash)).wait();
-    const event = receipt.events[0];
-    
-    const productId = event.args.productId;
-    // console.log(productId);
 
-    const approveReceipt = await (await productModule.connect(governor).approveProduct(productId, false)).wait();
-    expect(approveReceipt.events[0].event).to.be.equal("ProductDenied");
+    const votes = await productContract.getVoteInfo(productId);
+
+    expect(votes.agreeCount).to.be.equal(0);
+    expect(votes.denyCount).to.be.equal(1);
+    expect(votes.threshold).to.be.equal(1);
+
+
+    const productInfo = await productContract.getProduct(productId);
+    expect(productInfo.status).to.be.equal(2);
     
   });
 });
