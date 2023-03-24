@@ -3,12 +3,12 @@ pragma solidity >0.8.0 <= 0.8.17;
 
 contract AccountContract{
     //Events
-    event AccountRegistered(bytes32 did, address addr, AccountType accountType, bytes32 hash);
-    event AccountApproved(bytes32 did);
-    event AccountDenied(bytes32 did);
+    event AccountRegisteredEvent(bytes32 did, address addr, AccountType accountType, bytes32 hash);
+    event AccountApprovedEvent(bytes32 did);
+    event AccountDeniedEvent(bytes32 did);
     //Enums && structs
     enum AccountType {
-        Person,//0
+        Person,//0 (预留)
         Company,//1
         Witness,//2
         Admin //3
@@ -17,7 +17,8 @@ contract AccountContract{
     enum AccountStatus{
         Approving,//0
         Approved, //1
-        Denied //2
+        Denied, //2
+        Disabled//3 (预留)封禁
     }
 
     struct AccountData{
@@ -33,51 +34,45 @@ contract AccountContract{
     mapping(address=>bytes32) public addressToDid;
     mapping(bytes32=>AccountData) public didToAccount;
     mapping(AccountType=>uint256) public accountTypeNumbers;
+
+    // modifier
+    modifier onlyByAccount(AccountType accountType, AccountStatus accountStatus){
+        _requireAccount(msg.sender, accountType, accountStatus);
+        _;
+    }
+
     // constructor
     constructor() {
         _register(msg.sender, AccountType.Admin, AccountStatus.Approved, bytes32(0));
     }
     
-    //Admin functions
-    function setupAccounts(address[] calldata addrs, AccountType[] calldata accountTypes, bytes32[] calldata hashes) external {
-        _requireOnlyAdmin(msg.sender);
-        require(addrs.length == accountTypes.length, "addrs and accountTypes length not match");
-        require(addrs.length == hashes.length, "addrs and hashes length not match");
-        uint256 n = addrs.length;
-        for(uint256 i=0;i<n;i++) {
-            address addr = addrs[i];
-            _register(addr, accountTypes[i], AccountStatus.Approved, hashes[i]);
-        }
-    }
 
-    function approve(bytes32 did, bool agree) external {
-        _requireOnlyAdmin(msg.sender);
-        AccountData storage account = didToAccount[did];
-        require(account.accountStatus == AccountStatus.Approving, "Invalid account status");
-        if (agree){
-            account.accountStatus = AccountStatus.Approved;
-            emit AccountApproved(did);
-        } else{
-            account.accountStatus = AccountStatus.Denied;
-            emit AccountDenied(did);
-        }
-    }
-    
+
     // users functions
-    function register(bytes32 hash) external returns (bytes32 did){
+    function register(AccountType accountType, bytes32 hash) external returns (bytes32 did){
         //check
         require(hash != bytes32(0), "Invalid hash");
         address addr = msg.sender;
         require(addressToDid[addr] == bytes32(0), "address already registered");
-        
         //effects
-        did = _register(addr, AccountType.Company, AccountStatus.Approving, hash);
+        did = _register(addr, accountType, AccountStatus.Approving, hash);
     }
 
+    //Admin functions
+    function approve(bytes32 did, bool agree) external onlyByAccount(AccountType.Admin, AccountStatus.Approved) {
+        AccountData storage account = didToAccount[did];
+        require(account.addr != address(0), "Account not exist");
+        require(account.accountStatus == AccountStatus.Approving, "Invalid account status");
+        if (agree){
+            account.accountStatus = AccountStatus.Approved;
+            emit AccountApprovedEvent(did);
+        } else{
+            account.accountStatus = AccountStatus.Denied;
+            emit AccountDeniedEvent(did);
+        }
+    }
 
     //Query functions
-
-
     function getAccountByDid(bytes32 did) external view returns(AccountData memory) {
         return didToAccount[did];
     }
@@ -85,7 +80,6 @@ contract AccountContract{
     function getAccountByAddress(address addr) external view returns(AccountData memory) {
         return _getAccountByAddress(addr);
     }
-
 
     //Internal functions 
     function _generateDid(AccountType userType, address initAddr, bytes32 hash) internal pure returns(bytes32 id){
@@ -99,7 +93,7 @@ contract AccountContract{
         addressToDid[accountAddress] = did;
         didToAccount[did] = AccountData(accountAddress, did, accountType, accountStatus, hash);
         accountTypeNumbers[accountType]++;
-        emit AccountRegistered(did, accountAddress, accountType, hash);
+        emit AccountRegisteredEvent(did, accountAddress, accountType, hash);
     }
 
     function _getAccountByAddress(address addr) internal view returns(AccountData memory) {
@@ -108,9 +102,9 @@ contract AccountContract{
         return didToAccount[did];
     }
 
-    function _requireOnlyAdmin(address addr) internal view {
+    function _requireAccount(address addr, AccountType accountType, AccountStatus accountStatus) internal view {
         AccountData memory accountData = _getAccountByAddress(addr);
-        require(accountData.accountStatus == AccountStatus.Approved, "Only approved user can call");
-        require(accountData.accountType == AccountType.Admin, "Only admin can call");
+        require(accountData.accountStatus == accountStatus, "Account not ");
+        require(accountData.accountType == accountType, "Account are not authorized");
     }
 }

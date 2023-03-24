@@ -41,15 +41,16 @@ contract DataSchemaContract{
     }
 
     //functions
-    function createDataSchema(bytes32 hash) external returns(bytes32 dataSchemaId){
+    function createDataSchema(bytes32 hash, bytes productId) external returns(bytes32 dataSchemaId){
         require(hash != bytes32(0), "Invalid hash");
         AccountContract.AccountData memory owner = accountContract.getAccountByAddress(msg.sender);
         require(owner.accountStatus == AccountContract.AccountStatus.Approved, "Address not approved");
         require(owner.accountType == AccountContract.AccountType.Company, "Account is not company");
         require(hashToId[hash] == 0, "duplicate data schema hash");
-        
+        //判断产品状态，owner等 
         
         uint256 ownerNonce = ownerDataSchemaCount[owner.did];
+        //todo:用产品id
         dataSchemaId = IdGeneratorLib.generateId(owner.did, ownerNonce);
         dataSchemas[dataSchemaId] = DataSchemaInfo(hash, owner.did, DataSchemaStatus.Approving);
         hashToId[hash] = dataSchemaId;
@@ -65,7 +66,7 @@ contract DataSchemaContract{
     }
 
 
-    function approveProduct(bytes32 dataSchemaId, bool agree) external{
+    function approveDataSchema(bytes32 dataSchemaId, bool agree) external return(DataSchemaStatus status){
         AccountContract.AccountData memory owner = accountContract.getAccountByAddress(msg.sender);
         require(owner.accountStatus == AccountContract.AccountStatus.Approved, "Address not approved");
         require(owner.accountType == AccountContract.AccountType.Witness, "Account is not witness");
@@ -92,13 +93,14 @@ contract DataSchemaContract{
             }
         }
         dataSchemaVoters[dataSchemaId][owner.did] = true;
+        return dataSchema.status;
     }
 
     function getDataSchema(bytes32 dataSchemaId) external view returns(DataSchemaInfo memory){
         return dataSchemas[dataSchemaId];
     }
 
-    function getVoteInfo(bytes32 productId) external view returns(VoteInfo memory){
+    function getVoteInfo(bytes32 dataSchemaId) external view returns(VoteInfo memory){
         return dataSchemaCreationVotes[productId];
     }
 }

@@ -5,9 +5,9 @@ import "./AccountContract.sol";
 
 contract ProductContract{
     // event
-    event CreateProduct(bytes32 productId, bytes32 hash); 
-    event ProductApproved(bytes32 productId);
-    event ProductDenied(bytes32 productId);
+    event CreateProductEvent(bytes32 productId, bytes32 hash); 
+    event ProductApprovedEvent(bytes32 productId);
+    event ProductDeniedEvent(bytes32 productId);
     //enum && structs
     enum ProductStatus {
         Approving,
@@ -25,6 +25,7 @@ contract ProductContract{
         uint256 agreeCount;
         uint256 denyCount;
         uint256 threshold;
+        uint256 witnessCount;
     }
     //status
 
@@ -41,7 +42,7 @@ contract ProductContract{
     }
 
     //functions
-    function createProduct(bytes32 hash) external returns(bytes32 productId){
+    function createProduct(bytes32 hash) external returns(bytes32 productId, uint256 witnessCount){
         //request
         require(hash != bytes32(0), "Invalid hash");
         AccountContract.AccountData memory owner = accountContract.getAccountByAddress(msg.sender);
@@ -55,24 +56,29 @@ contract ProductContract{
         hashToId[hash] = productId;
         ownerNonce++;
         ownerProductCount[owner.did] = ownerNonce;
-        uint256 witnessCount = accountContract.accountTypeNumbers(AccountContract.AccountType.Witness);
+
+        witnessCount = accountContract.accountTypeNumbers(AccountContract.AccountType.Witness);
         productCreationVotes[productId] = VoteInfo(
             0,
             0,
-            (witnessCount + 1) / 2
+            witnessCount/2 + 1,
+            witnessCount
         );
         emit CreateProduct(productId, hash);
     }
 
 
     function approveProduct(bytes32 productId, bool agree) external{
-        AccountContract.AccountData memory owner = accountContract.getAccountByAddress(msg.sender);
-        require(owner.accountStatus == AccountContract.AccountStatus.Approved, "Address not approved");
-        require(owner.accountType == AccountContract.AccountType.Witness, "Account is not witness");
+        //
+        AccountContract.AccountData memory witness = accountContract.getAccountByAddress(msg.sender);
+        require(witness.accountStatus == AccountContract.AccountStatus.Approved, "Address not approved");
+        require(witness.accountType == AccountContract.AccountType.Witness, "Account is not witness");
+        
         ProductInfo storage product = products[productId];
+        //todo: 存在
         require(product.status == ProductStatus.Approving, "Invalid product status");
         VoteInfo storage voteInfo = productCreationVotes[productId];
-        require(!productVoters[productId][owner.did], "Duplicate vote");
+        require(!productVoters[productId][witness.did], "Duplicate vote");
         uint256 threshold = voteInfo.threshold;
         if (agree){
             uint256 agreeCount = voteInfo.agreeCount + 1;
@@ -85,12 +91,13 @@ contract ProductContract{
         } else{
             uint256 denyCount = voteInfo.denyCount + 1;
             voteInfo.denyCount = denyCount;
-            if (denyCount >= threshold){
+            if (denyCount > voteInfo.witnessCount - threshold){
                 product.status = ProductStatus.Denied;
                 emit ProductDenied(productId);
             }
         }
-        productVoters[productId][owner.did] = true;
+        productVoters[productId][witness.did] = true;
+        //event
     }
 
     function getProduct(bytes32 productId) external view returns(ProductInfo memory){
