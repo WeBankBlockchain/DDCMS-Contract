@@ -36,8 +36,8 @@ contract AccountContract{
     mapping(AccountType=>uint256) public accountTypeNumbers;
 
     // modifier
-    modifier onlyByAccount(AccountType accountType, AccountStatus accountStatus){
-        _requireAccount(msg.sender, accountType, accountStatus);
+    modifier onlyByAccount(AccountType accountType){
+        _requireAccount(msg.sender, accountType, AccountStatus.Approved);
         _;
     }
 
@@ -46,8 +46,6 @@ contract AccountContract{
         _register(msg.sender, AccountType.Admin, AccountStatus.Approved, bytes32(0));
     }
     
-
-
     // users functions
     function register(AccountType accountType, bytes32 hash) external returns (bytes32 did){
         //check
@@ -59,7 +57,7 @@ contract AccountContract{
     }
 
     //Admin functions
-    function approve(bytes32 did, bool agree) external onlyByAccount(AccountType.Admin, AccountStatus.Approved) {
+    function approve(bytes32 did, bool agree) external onlyByAccount(AccountType.Admin) {
         AccountData storage account = didToAccount[did];
         require(account.addr != address(0), "Account not exist");
         require(account.accountStatus == AccountStatus.Approving, "Invalid account status");
@@ -104,7 +102,7 @@ contract AccountContract{
 
     function _requireAccount(address addr, AccountType accountType, AccountStatus accountStatus) internal view {
         AccountData memory accountData = _getAccountByAddress(addr);
-        require(accountData.accountStatus == accountStatus, "Account not ");
+        require(accountData.accountStatus == accountStatus, "Invalid account status");
         require(accountData.accountType == accountType, "Account are not authorized");
     }
 }

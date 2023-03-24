@@ -2,22 +2,26 @@ pragma solidity >0.8.0 <= 0.8.17;
 
 import "./libs/IdGeneratorLib.sol";
 import "./AccountContract.sol";
+import "./ProductContract.sol";
 
 contract DataSchemaContract{
     // event
-    event CreateDataSchema(bytes32 dataSchemaId, bytes32 hash); 
-    event DataSchemaApproved(bytes32 dataSchemaId);
-    event DataSchemaDenied(bytes32 dataSchemaId);
+    event CreateDataSchemaEvent(bytes32 dataSchemaId, bytes32 hash); 
+    event VoteDataSchemaEvent(bytes32 dataSchemaId, bytes32 voterId, bool agree, uint256 agreeCount, uint256 denyCount, DataSchemaStatus afterStatus);
+
     //enum && structs
     enum DataSchemaStatus {
         Approving,
         Approved,
-        Denied
+        Denied,
+        Disabled,
+        Banned
     }
     
     struct DataSchemaInfo{
         bytes32 hash;
-        bytes32 owner;
+        bytes32 ownerId;
+        bytes32 productId;
         DataSchemaStatus status;
     }
     
@@ -25,82 +29,112 @@ contract DataSchemaContract{
         uint256 agreeCount;
         uint256 denyCount;
         uint256 threshold;
+        uint256 witnessCount;
     }
-    //status
 
+    //status
     AccountContract private accountContract;
+    ProductContract private productContract;
     mapping(bytes32 => DataSchemaInfo) dataSchemas;
     mapping(bytes32 => bytes32) private hashToId;
-    mapping(bytes32 => uint256) private ownerDataSchemaCount;
+    mapping(bytes32 => uint256) private productDataSchemaCount;
     mapping(bytes32 => VoteInfo) private dataSchemaCreationVotes;
     mapping(bytes32=>mapping(bytes32 => bool)) private dataSchemaVoters;
     
     //constructor
-    constructor(address _accountContract) {
+    constructor(address _accountContract, address _productContract) {
         accountContract = AccountContract(_accountContract);
+        productContract = ProductContract(_productContract);
+    }
+
+    //modifier
+    modifier onlyByAccount(
+        AccountContract.AccountType accountType){
+            _requireAccount(msg.sender, accountType, AccountContract.AccountStatus.Approved);
+        _;
     }
 
     //functions
-    function createDataSchema(bytes32 hash, bytes productId) external returns(bytes32 dataSchemaId){
+    function createDataSchema(bytes32 hash, bytes32 productId) external returns(bytes32 dataSchemaId, uint256 witnessCount){
+        //requires
         require(hash != bytes32(0), "Invalid hash");
-        AccountContract.AccountData memory owner = accountContract.getAccountByAddress(msg.sender);
-        require(owner.accountStatus == AccountContract.AccountStatus.Approved, "Address not approved");
-        require(owner.accountType == AccountContract.AccountType.Company, "Account is not company");
+        require(productId != bytes32(0), "Invalid productId");
         require(hashToId[hash] == 0, "duplicate data schema hash");
-        //判断产品状态，owner等 
-        
-        uint256 ownerNonce = ownerDataSchemaCount[owner.did];
-        //todo:用产品id
-        dataSchemaId = IdGeneratorLib.generateId(owner.did, ownerNonce);
-        dataSchemas[dataSchemaId] = DataSchemaInfo(hash, owner.did, DataSchemaStatus.Approving);
+        //Get owner info
+        AccountContract.AccountData memory ownerAccount = accountContract.getAccountByAddress(msg.sender);
+        //Get product info
+        ProductContract.ProductInfo memory productInfo = productContract.getProduct(productId);
+        //Validate product and owner
+        require(productInfo.status == ProductContract.ProductStatus.Approved, "product not approved");
+        require(productInfo.ownerId == ownerAccount.did, "must be product owner");
+        require(ownerAccount.accountStatus == AccountContract.AccountStatus.Approved, "owner not approved");
+
+        //Generate schema id
+        uint256 productNonce = productDataSchemaCount[productId];
+        dataSchemaId = IdGeneratorLib.generateId(productId, productNonce);
+        dataSchemas[dataSchemaId] = DataSchemaInfo(hash, ownerAccount.did, productId, DataSchemaStatus.Approving);
         hashToId[hash] = dataSchemaId;
-        ownerNonce++;
-        ownerDataSchemaCount[owner.did] = ownerNonce;
-        uint256 witnessCount = accountContract.accountTypeNumbers(AccountContract.AccountType.Witness);
+        productNonce++;
+        productDataSchemaCount[productId] = productNonce;
+        witnessCount = accountContract.accountTypeNumbers(AccountContract.AccountType.Witness);
         dataSchemaCreationVotes[dataSchemaId] = VoteInfo(
             0, 
             0, 
-            (witnessCount + 1) / 2
+            (witnessCount + 1) / 2,
+            witnessCount
         );
-        emit CreateDataSchema(dataSchemaId, hash);
+        emit CreateDataSchemaEvent(dataSchemaId, hash);
     }
 
 
-    function approveDataSchema(bytes32 dataSchemaId, bool agree) external return(DataSchemaStatus status){
-        AccountContract.AccountData memory owner = accountContract.getAccountByAddress(msg.sender);
-        require(owner.accountStatus == AccountContract.AccountStatus.Approved, "Address not approved");
-        require(owner.accountType == AccountContract.AccountType.Witness, "Account is not witness");
-
+    function approveDataSchema(bytes32 dataSchemaId, bool agree) external onlyByAccount(AccountContract.AccountType.Witness) 
+    returns(bytes32 witnessDid, uint256 agreeCount, uint256 denyCount, DataSchemaStatus afterStatus){
+        //Arg validations
+        require(dataSchemaId != 0, "Invalid data schema id");
+    
+        //Validation data schema status
         DataSchemaInfo storage dataSchema = dataSchemas[dataSchemaId];
         require(dataSchema.status == DataSchemaStatus.Approving, "Invalid data schema status");
+
+        //Vote
+        AccountContract.AccountData memory witness = accountContract.getAccountByAddress(msg.sender);
+        witnessDid = witness.did;
         VoteInfo storage voteInfo = dataSchemaCreationVotes[dataSchemaId];
-        require(!dataSchemaVoters[dataSchemaId][owner.did], "Duplicate vote");
+        require(!dataSchemaVoters[dataSchemaId][witnessDid], "Duplicate vote");
         uint256 threshold = voteInfo.threshold;
+        uint256 witnessCount = voteInfo.witnessCount;
         if (agree){
-            uint256 agreeCount = voteInfo.agreeCount + 1;
+            agreeCount = voteInfo.agreeCount + 1;
             voteInfo.agreeCount = agreeCount;
             if (agreeCount >= threshold){
-                dataSchema.status = DataSchemaStatus.Approved;
-                emit DataSchemaApproved(dataSchemaId);
+                afterStatus = DataSchemaStatus.Approved;
             }
 
         } else{
-            uint256 denyCount = voteInfo.denyCount + 1;
+            denyCount = voteInfo.denyCount + 1;
             voteInfo.denyCount = denyCount;
-            if (denyCount >= threshold){
-                dataSchema.status = DataSchemaStatus.Denied;
-                emit DataSchemaDenied(dataSchemaId);
+            if (denyCount > witnessCount - threshold){
+                afterStatus = DataSchemaStatus.Denied;
             }
         }
-        dataSchemaVoters[dataSchemaId][owner.did] = true;
-        return dataSchema.status;
+        dataSchema.status = afterStatus;
+        dataSchemaVoters[dataSchemaId][witnessDid] = true;
+        emit VoteDataSchemaEvent(dataSchemaId, witnessDid, agree, agreeCount, denyCount, afterStatus);
     }
 
-    function getDataSchema(bytes32 dataSchemaId) external view returns(DataSchemaInfo memory){
-        return dataSchemas[dataSchemaId];
+    function getDataSchema(bytes32 dataSchemaId) external view returns(DataSchemaInfo memory dataSchema){
+        dataSchema = dataSchemas[dataSchemaId];
+        require(dataSchema.ownerId != 0, "data schema not exist");
     }
 
     function getVoteInfo(bytes32 dataSchemaId) external view returns(VoteInfo memory){
-        return dataSchemaCreationVotes[productId];
+        return dataSchemaCreationVotes[dataSchemaId];
+    }
+
+    function _requireAccount(address addr, AccountContract.AccountType accountType, AccountContract.AccountStatus accountStatus)
+    internal view{
+        AccountContract.AccountData memory accountInfo = accountContract.getAccountByAddress(addr);
+        require(accountInfo.accountStatus == accountStatus, "Invalid account status");
+        require(accountInfo.accountType == accountType, "Account is not witness");
     }
 }
