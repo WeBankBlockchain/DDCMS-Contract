@@ -36,8 +36,10 @@ contract AccountContract{
     mapping(AccountType=>uint256) public accountTypeNumbers;
 
     // modifier
-    modifier onlyByAccount(AccountType accountType){
-        _requireAccount(msg.sender, accountType, AccountStatus.Approved);
+    modifier onlyAdmin(){
+        AccountData memory accountData = _getAccountByAddress(msg.sender);
+        require(accountData.accountStatus == AccountStatus.Approved, "Invalid account status");
+        require(accountData.accountType == AccountType.Admin, "Account are not admin");
         _;
     }
 
@@ -57,7 +59,7 @@ contract AccountContract{
     }
 
     //Admin functions
-    function approve(bytes32 did, bool agree) external onlyByAccount(AccountType.Admin) {
+    function approve(bytes32 did, bool agree) external onlyAdmin() {
         AccountData storage account = didToAccount[did];
         require(account.addr != address(0), "Account not exist");
         require(account.accountStatus == AccountStatus.Approving, "Invalid account status");
@@ -98,11 +100,5 @@ contract AccountContract{
         bytes32 did = addressToDid[addr];
         require(did != 0, "address not registered");
         return didToAccount[did];
-    }
-
-    function _requireAccount(address addr, AccountType accountType, AccountStatus accountStatus) internal view {
-        AccountData memory accountData = _getAccountByAddress(addr);
-        require(accountData.accountStatus == accountStatus, "Invalid account status");
-        require(accountData.accountType == accountType, "Account are not authorized");
     }
 }

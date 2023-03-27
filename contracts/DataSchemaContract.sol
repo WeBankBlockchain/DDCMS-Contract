@@ -48,9 +48,10 @@ contract DataSchemaContract{
     }
 
     //modifier
-    modifier onlyByAccount(
-        AccountContract.AccountType accountType){
-            _requireAccount(msg.sender, accountType, AccountContract.AccountStatus.Approved);
+    modifier onlyWitness(){
+        AccountContract.AccountData memory accountInfo = accountContract.getAccountByAddress(msg.sender);
+        require(accountInfo.accountStatus == AccountContract.AccountStatus.Approved, "Invalid account status");
+        require(accountInfo.accountType == AccountContract.AccountType.Witness, "Account is not witness");
         _;
     }
 
@@ -87,7 +88,7 @@ contract DataSchemaContract{
     }
 
 
-    function approveDataSchema(bytes32 dataSchemaId, bool agree) external onlyByAccount(AccountContract.AccountType.Witness) 
+    function approveDataSchema(bytes32 dataSchemaId, bool agree) external onlyWitness() 
     returns(bytes32 witnessDid, uint256 agreeCount, uint256 denyCount, DataSchemaStatus afterStatus){
         //Arg validations
         require(dataSchemaId != 0, "Invalid data schema id");
@@ -131,10 +132,8 @@ contract DataSchemaContract{
         return dataSchemaCreationVotes[dataSchemaId];
     }
 
-    function _requireAccount(address addr, AccountContract.AccountType accountType, AccountContract.AccountStatus accountStatus)
+    function _requireAccount(address addr, AccountContract.AccountType accountType)
     internal view{
-        AccountContract.AccountData memory accountInfo = accountContract.getAccountByAddress(addr);
-        require(accountInfo.accountStatus == accountStatus, "Invalid account status");
-        require(accountInfo.accountType == accountType, "Account is not witness");
+        
     }
 }

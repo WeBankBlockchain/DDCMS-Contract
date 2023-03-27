@@ -37,10 +37,15 @@ contract ProductContract{
     mapping(bytes32 => VoteInfo) private productCreationVotes;
     mapping(bytes32=>mapping(bytes32=>bool)) public productVoters;
     
-    //modifier
-    modifier onlyByAccount(
-        AccountContract.AccountType accountType){
-            _requireAccount(msg.sender, accountType, AccountContract.AccountStatus.Approved);
+    //company modifier
+    modifier onlyCompany(){
+        _requireAccount(msg.sender, AccountContract.AccountType.Company); 
+        _;
+    }
+
+    //witness modifier
+    modifier onlyWitness(){
+        _requireAccount(msg.sender, AccountContract.AccountType.Witness);
         _;
     }
 
@@ -50,7 +55,7 @@ contract ProductContract{
     }
 
     //functions
-    function createProduct(bytes32 hash) external onlyByAccount(AccountContract.AccountType.Company) 
+    function createProduct(bytes32 hash) external onlyCompany() 
     returns(bytes32 productId, uint256 witnessCount) {
         //requires
         require(hash != bytes32(0), "Invalid hash");
@@ -78,7 +83,7 @@ contract ProductContract{
     }
 
 
-    function approveProduct(bytes32 productId, bool agree) external onlyByAccount(AccountContract.AccountType.Witness)
+    function approveProduct(bytes32 productId, bool agree) external onlyWitness()
     returns(bytes32 witnessDid, uint256 agreeCount, uint256 denyCount, ProductStatus afterStatus)
     {
         //Product id validation
@@ -121,10 +126,10 @@ contract ProductContract{
         return productCreationVotes[productId];
     }
 
-    function _requireAccount(address addr, AccountContract.AccountType accountType, AccountContract.AccountStatus accountStatus)
+    function _requireAccount(address addr, AccountContract.AccountType accountType)
     internal view{
         AccountContract.AccountData memory accountInfo = accountContract.getAccountByAddress(addr);
-        require(accountInfo.accountStatus == accountStatus, "Invalid account status");
+        require(accountInfo.accountStatus == AccountContract.AccountStatus.Approved, "Invalid account status");
         require(accountInfo.accountType == accountType, "Account is not witness");
     }
 }
