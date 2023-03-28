@@ -81,7 +81,7 @@ contract DataSchemaContract{
         dataSchemaCreationVotes[dataSchemaId] = VoteInfo(
             0, 
             0, 
-            (witnessCount + 1) / 2,
+            witnessCount / 2 + 1,
             witnessCount
         );
         emit CreateDataSchemaEvent(dataSchemaId, hash);
