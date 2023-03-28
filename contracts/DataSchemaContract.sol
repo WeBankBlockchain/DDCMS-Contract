@@ -107,6 +107,7 @@ contract DataSchemaContract{
         if (agree){
             agreeCount = voteInfo.agreeCount + 1;
             voteInfo.agreeCount = agreeCount;
+            denyCount = voteInfo.denyCount;
             if (agreeCount >= threshold){
                 afterStatus = DataSchemaStatus.Approved;
             }
@@ -114,7 +115,8 @@ contract DataSchemaContract{
         } else{
             denyCount = voteInfo.denyCount + 1;
             voteInfo.denyCount = denyCount;
-            if (denyCount > witnessCount - threshold){
+            agreeCount = voteInfo.agreeCount;
+            if (denyCount > (voteInfo.witnessCount - 1) / 2){
                 afterStatus = DataSchemaStatus.Denied;
             }
         }

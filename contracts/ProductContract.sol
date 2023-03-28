@@ -100,6 +100,7 @@ contract ProductContract{
         if (agree){
             agreeCount = voteInfo.agreeCount + 1;
             voteInfo.agreeCount = agreeCount;
+            denyCount = voteInfo.denyCount;
             if (agreeCount >= threshold){
                 afterStatus = ProductStatus.Approved;
             }
@@ -107,7 +108,8 @@ contract ProductContract{
         } else{
             denyCount = voteInfo.denyCount + 1;
             voteInfo.denyCount = denyCount;
-            if (denyCount > voteInfo.witnessCount - threshold){
+            agreeCount = voteInfo.agreeCount;
+            if (denyCount > (voteInfo.witnessCount - 1) / 2){
                afterStatus = ProductStatus.Denied;
             }
         }
