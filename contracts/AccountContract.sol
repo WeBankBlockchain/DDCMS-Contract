@@ -65,6 +65,7 @@ contract AccountContract{
         require(account.accountStatus == AccountStatus.Approving, "Invalid account status");
         if (agree){
             account.accountStatus = AccountStatus.Approved;
+            accountTypeNumbers[account.accountType]++;
             emit AccountApprovedEvent(did);
         } else{
             account.accountStatus = AccountStatus.Denied;
@@ -92,7 +93,6 @@ contract AccountContract{
         did = _generateDid(accountType, accountAddress, hash);
         addressToDid[accountAddress] = did;
         didToAccount[did] = AccountData(accountAddress, did, accountType, accountStatus, hash);
-        accountTypeNumbers[accountType]++;
         emit AccountRegisteredEvent(did, accountAddress, accountType, hash);
     }
 
