@@ -15,6 +15,7 @@ contract DataSchemaContract {
         uint256 denyCount,
         DataSchemaStatus afterStatus
     );
+    event CreateDataDetailEvent(bytes32 indexed dataSchemaId,string dataSchemaName,string contentJson);
 
     //enum && structs
     enum DataSchemaStatus {
@@ -39,10 +40,16 @@ contract DataSchemaContract {
         uint256 witnessCount;
     }
 
+    struct DataDetail {
+        string dataSchemaName;
+        string contentJson;
+    }
+
     //status
     AccountContract private accountContract;
     ProductContract private productContract;
     mapping(bytes32 => DataSchemaInfo) dataSchemas;
+    mapping(bytes32 => DataDetail) dataDetails;
     mapping(bytes32 => bytes32) private hashToId;
     mapping(bytes32 => uint256) private productDataSchemaCount;
     mapping(bytes32 => VoteInfo) private dataSchemaCreationVotes;
@@ -121,6 +128,63 @@ contract DataSchemaContract {
             witnessCount
         );
         emit CreateDataSchemaEvent(dataSchemaId, hash);
+    }
+
+    function createDataDetail(
+        bytes32 _hash,
+        bytes32 productBid,
+        bytes32 dataSchemaId,
+        string memory productId,
+        string memory _contentJson,
+        string memory dataSchemaName
+    ) external {
+        //Get owner info
+        AccountContract.AccountData memory ownerAccount = accountContract
+            .getAccountByAddress(msg.sender);
+        //Get product info
+        ProductContract.ProductInfo memory productInfo = productContract
+            .getProduct(productBid);
+        //Validate product and owner
+        require(
+            productInfo.status == ProductContract.ProductStatus.Approved,
+            "product not approved"
+        );
+        require(
+            productInfo.ownerId == ownerAccount.did,
+            "must be product owner"
+        );
+        require(
+            ownerAccount.accountStatus ==
+                AccountContract.AccountStatus.Approved,
+            "owner not approved"
+        );
+        bytes32 tempHash = _hash;
+        if(_hash == bytes32(0)){
+            // calculate hash for verify
+            string memory str = string(abi.encodePacked(productId,_contentJson,dataSchemaName));
+            tempHash = keccak256(abi.encodePacked(str));
+        }
+        require(hashToId[tempHash] == dataSchemaId,"data is not consistent");
+
+        _createDataDetail(dataSchemaId,_contentJson, dataSchemaName);
+    }
+    
+    function _createDataDetail(
+        bytes32 dataSchemaId,
+        string memory _contentJson,
+        string memory dataSchemaName
+    )internal{
+        dataDetails[dataSchemaId] = DataDetail(
+            dataSchemaName,
+            _contentJson
+        );
+        emit CreateDataDetailEvent(dataSchemaId,dataSchemaName,_contentJson);
+    }
+
+    function getDataDetail(
+        bytes32 dataSchemaId
+    ) external view returns(DataDetail memory){
+        return dataDetails[dataSchemaId];
     }
 
     function approveDataSchema(
